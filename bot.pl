@@ -74,7 +74,7 @@ $irc->reg_cb(command => sub {
             $game->submit_cards($who, @params);
         }
 
-        if ($cmd eq 'choose' && $params[0] =~ /^\d+$/){
+        if ($cmd eq 'choose' && @params > 0 && $params[0] =~ /^\d+$/){
             $game->choose_winner($who, $params[0]);
         }
 
@@ -97,9 +97,9 @@ $irc->reg_cb(channel_remove => sub {
 
 $irc->connect("irc.7chan.org", 6667, { nick => 'cahbot' });
 
-$irc->send_srv(NS => 'identify madl1bz.');
+my $pw = do './identify';
+$irc->send_srv(NS => 'identify '.$pw);
 #$irc->send_srv(JOIN => '#linux');
-
 
 use AnyEvent::ReadLine::Gnu;
 
