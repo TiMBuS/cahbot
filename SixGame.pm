@@ -188,10 +188,8 @@ class IRC::CAHGame {
 
 	method retire-player(Str $name) {
 		if $.players{$name} -> $player {
-			if !$player.active {
-				$.players{$player}:delete;
-				return;
-			}
+			$.players{$player}:delete;
+			return unless $player.active;
 
 			$.say("$name is out! His final score was: \x[02]$player.score()");
 			my $king-is-dead = $player === $.players.czar;
