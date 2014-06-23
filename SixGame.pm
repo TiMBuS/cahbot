@@ -188,14 +188,15 @@ class IRC::CAHGame {
 
 	method retire-player(Str $name) {
 		if $.players{$name} -> $player {
-			if $player.active {
-				$.say("$name is out! His final score was: \x[02]$player.score()");
+			if !$player.active {
+				$.players{$player}:delete;
+				return;
 			}
-			
+
+			$.say("$name is out! His final score was: \x[02]$player.score()");
 			my $king-is-dead = $player === $.players.czar;
 			$.white-deck.put-back($player.hand);
-			$.players{$player}:delete;
-
+			
 			if $.players < 4 {
 				$.say("Not enough players to keep this game alive. Bye.");
 				return &.cleanup();

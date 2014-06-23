@@ -81,9 +81,9 @@ class CAHBot does Net::IRC::CommandHandler {
 		);
 	}
 
-	method forcedeal($ev, $match) is cmd(Long) {
-		$game.next-step;
-	}
+	# method forcedeal($ev, $match) is cmd(Long) {
+	# 	$game.next-step;
+	# }
 
 	multi method nickchange($ev) {
 		return unless defined $game;
