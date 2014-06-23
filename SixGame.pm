@@ -289,6 +289,28 @@ class IRC::CAHGame {
 		}
 	}
 
+	method !build-scores($player?) {
+		my $fmt = do if $player {{ 
+			my $u = $player === * ?? "\x1f" !! ""; 
+			"$u{.name} => {.score}$u"; 
+		}}
+		else {{ 
+			"{.name} => {.score}" 
+		}}
+
+		"Current scores: " ~
+		$.players.sort(-*.score).map($fmt).join(', ')
+	}
+
+	multi method show-score(Str $who){
+		if $.players{$who} -> $player {
+			$.whisper-to($who, $!build-scores($player));
+		}
+	}
+	multi method show-score() {
+		$.say($!build-scores());
+	}
+
 	multi method step(Deal) {
 		for $.players.list -> $player {
 			$player.active ||= True;
@@ -297,13 +319,7 @@ class IRC::CAHGame {
 		$.players.rotate-czar();
 		$!black-card = $.black-deck.deal[0];
 		
-
-		if $.round %% 5 {
-			$.say(
-				"Current scores: " ~
-				$.players.sort(-*.score).map({ "{.name} => {.score}" }).join(', ')
-			);
-		}
+		$.show-score() if $.round %% 5;
 		
 		$.say(
 			"\x[02]Round $.round()\x[02]. " ~ 

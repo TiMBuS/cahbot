@@ -71,7 +71,14 @@ class CAHBot does Net::IRC::CommandHandler {
 	}
 
 	method help($ev, $match) is cmd(Long) {
-
+		$ev.msg(
+			"Commands: !game to start a game, !join to get in, "~
+			"!hand to see your hand, !play <num> to play a card, "~
+			"!choose <num> to pick a winner (as czar), "~
+			"!score to see your score, !kick to kick a player, "~
+			"!quit to leave",
+			$ev.who
+		);
 	}
 
 	method forcedeal($ev, $match) is cmd(Long) {
