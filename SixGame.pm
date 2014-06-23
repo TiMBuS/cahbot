@@ -298,17 +298,16 @@ class IRC::CAHGame {
 			"{.name} => {.score}" 
 		}}
 
-		"Current scores: " ~
-		$.players.sort(-*.score).map($fmt).join(', ')
+		"Current scores: " ~ $.players.sort(-*.score).map($fmt).join(', ');
 	}
 
 	multi method show-score(Str $who){
 		if $.players{$who} -> $player {
-			$.whisper-to($who, $!build-scores($player));
+			$.whisper-to($who, self!build-scores($player));
 		}
 	}
 	multi method show-score() {
-		$.say($!build-scores());
+		$.say(self!build-scores());
 	}
 
 	multi method step(Deal) {
