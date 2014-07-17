@@ -5,9 +5,8 @@ class Card {
 	has $.blanks = $!text.comb(/ __+ /).elems || 1;
 	
 	method fill-blanks(*@cards) {
-		return unless @cards >= $.blanks;
 		my @filler = @cards.map("\x[1f]" ~ *.text.subst(/ '.' $/, '') ~ "\x[1f]");
-		$.text.subst(/ __+ /, {shift @filler // ''}, :g) ~ " " ~ @filler;
+		$.text.subst(/ __+ /, {@filler.shift // ''}, :g) ~ " " ~ @filler;
 	};
 }
 
