@@ -5,8 +5,9 @@ class Card {
 	has $.blanks = $!text.comb(/ __+ /).elems || 1;
 	
 	method fill-blanks(*@cards) {
+		return unless @cards >= $.blanks;
 		my @filler = @cards.map("\x[1f]" ~ *.text.subst(/ '.' $/, '') ~ "\x[1f]");
-		$.text.subst(/ __+ /, {shift @filler // ''}, :g) ~ @filler;
+		$.text.subst(/ __+ /, {shift @filler // ''}, :g) ~ " " ~ @filler;
 	};
 }
 
@@ -64,35 +65,30 @@ class Player {
 }
 
 class PlayerStore is Array does Associative {
-	has $czar-idx = 0;
+	has $czar-idx;
+	method reset-czar {$czar-idx = 0}
+	method new {my $o = callsame; $o.reset-czar; $o}
 
 	method czar {
 		self[$czar-idx];
 	}
 
 	method rotate-czar() {
-		return unless self > 1;
-		return unless $.grep(*.active);
-
-		repeat until self[$czar-idx].active {
+		return unless self.elems > 1;
+		
+		my $orig-idx = $czar-idx;
+		repeat until $czar-idx == $orig-idx || self[$czar-idx].active {
 			$czar-idx = ($czar-idx + 1) % self;
 		}
-		self[$czar-idx];
 	}
 	
-	method at_key (Str:D $key) {
+	method at_key (Cool:D $key) {
 		self.first: *.name eq $key;
 	}
 
-	multi method delete_key (Cool:D $key) {
-		if self.first-index(*.name eq $key) -> $i {
-			self.splice($i, 1);
-			$.rotate-czar if $czar-idx == $i;
-		}
-	}
-
-	multi method delete_key (Player:D $key) {
-		if self.first-index($key) -> $i {
+	method delete_key (Cool:D $key) {
+		my $i = self.first-index(*.name eq $key);
+		if defined $i {
 			self.splice($i, 1);
 			$.rotate-czar if $czar-idx == $i;
 		}
@@ -123,7 +119,6 @@ class IRC::CAHGame {
 		$.conn.sendln("NOTICE $who :$text");
 	}
 
-
 	has $.white-deck = Deck.new(cardfile => 'wcards.txt');
 	has $.black-deck = Deck.new(cardfile => 'bcards.txt');
 	has $.players = PlayerStore.new;
@@ -153,7 +148,8 @@ class IRC::CAHGame {
 	}
 
 	method start() {
-		if !defined $.current-step && $.players >= 4 {
+		if (!defined($.current-step)) && $.players >= 4 {
+			$.players.reset-czar;
 			$.next-step;
 		}
 	}
@@ -171,7 +167,7 @@ class IRC::CAHGame {
 			if $.players == 4 {
 				$.say(
 					'We have 4 players now. ' ~
-					'You can wait for more or type !ready to start any time.'
+					'You can wait for more or type !start to start any time.'
 				);
 			}
 		}
@@ -188,10 +184,11 @@ class IRC::CAHGame {
 
 	method retire-player(Str $name) {
 		if $.players{$name} -> $player {
-			$.players{$player}:delete;
+			$.say("$name is out!");
+			$.players{$name}:delete;
 			return unless $player.active;
 
-			$.say("$name is out! His final score was: \x[02]$player.score()");
+			$.say("His final score was: \x[02]$player.score()");
 			my $king-is-dead = $player === $.players.czar;
 			$.white-deck.put-back($player.hand);
 			
@@ -202,7 +199,12 @@ class IRC::CAHGame {
 			if $king-is-dead {
 				$.say("Oh no, the czar left. Let's start over..");
 				for $.players.list { .submission = Nil };
-				$.next-step(EndTurn);
+				return $.next-step(EndTurn);
+			}
+			if $.current-step == Submit {
+				if self!check-submitted {
+					$.next-step;
+				}
 			}
 		}
 	}
@@ -248,7 +250,7 @@ class IRC::CAHGame {
 
 	multi method show-hand(Str $who) {
 		if $.players{$who} -> $player {
-			$.show-hand($player);
+			$.show-hand($player) if $player.active;
 		}
 	}
 
@@ -282,10 +284,14 @@ class IRC::CAHGame {
 			$player.submit-cards(@cards);
 			$.whisper-to($player, "Card(s) submitted! Thank you citizen.");
 
-			if $.players.grep(*.submission == 0) == 1 {
+			if self!check-submitted {
 				$.next-step;
 			}
 		}
+	}
+	method !check-submitted() {
+		#Only one player should he active and submissionless. The czar.
+		return $.players.grep({$_.active && $_.submission == 0}) == 1;
 	}
 
 	method !build-scores($player?) {
@@ -330,7 +336,7 @@ class IRC::CAHGame {
 			"\x[02]$.black-card.text()\x[02]"
 		);
 
-		$.show-hand($_) for $.players.grep(* !=== $.players.czar);
+		$.show-hand($_) for $.players.grep({ $_.active && $_ !=== $.players.czar });
 
 		Continue;
 	}
@@ -350,7 +356,7 @@ class IRC::CAHGame {
 	has @.submitters;
 	multi method step(Reveal) {
 		my $czar = $.players.czar;
-		@.submitters = $.players.list.grep( * !=== $czar ).pick(*);
+		@.submitters = $.players.grep({ $_.active && $_ !=== $czar }).pick(*);
 	
 		$.say("The round is over!");
 		$.say("Let's all gather around and harshly judge each other's submissions now:");
@@ -463,3 +469,19 @@ my $suffixes = lines q:to"END";
 sub bullshitify-name (Str $name) {
 	"$prefixes.roll() $name, $suffixes.roll()!";
 }
+
+
+# sub MAIN() {
+# 	my $bot = IRC::CAHGame.new(conn => class {method sendln($t) {say $t} }, channel => 'Term');
+
+# 	$bot.add-player('Ponbus');
+# 	$bot.add-player('Timbiki');
+# 	$bot.add-player('Shaggy');
+# 	$bot.add-player('Scooby');
+# 	$bot.add-player('Batman');
+
+# 	$bot.retire-player('Ponbus');
+# 	$bot.add-player('Ponbus');
+
+# 	$bot.start;
+# }
