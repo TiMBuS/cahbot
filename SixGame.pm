@@ -345,7 +345,7 @@ class IRC::CAHGame {
 		$.say(
 			"Time to pick your best {
 				$.black-card.blanks() > 1 ?? 
-					"$.black-card.blanks cards!" !! 
+					"$.black-card.blanks() cards!" !! 
 					"response!"
 			}"
 		);
