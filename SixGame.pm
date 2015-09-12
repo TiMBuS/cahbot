@@ -3,7 +3,7 @@ use v6;
 class Card {
 	has $.text;
 	has $.blanks = $!text.comb(/ __+ /).elems || 1;
-	
+
 	method fill-blanks(*@cards) {
 		my @filler = @cards.map("\x[1f]" ~ *.text.subst(/ '.' $/, '') ~ "\x[1f]");
 		$.text.subst(/ __+ /, {@filler.shift // ''}, :g) ~ " " ~ @filler;
@@ -11,7 +11,7 @@ class Card {
 }
 
 class Deck {
-	has $.cardfile = !!! 'Need to pass a card file to a deck'; 
+	has $.cardfile = !!! 'Need to pass a card file to a deck';
 	has @deck = $!cardfile.IO.lines.map({ Card.new(text => $^l) }).pick(*);
 	has @graveyard = ();
 
@@ -49,7 +49,7 @@ class Player {
 
 	method fill-hand($deck, $cap = 10) {
 		my $hand-size = @.hand.elems;
-		@.hand.push: $deck.deal( $cap - $hand-size ) 
+		@.hand.push: $deck.deal( $cap - $hand-size )
 			if $hand-size < $cap;
 	}
 
@@ -74,13 +74,13 @@ class PlayerStore is Array does Associative {
 
 	method rotate-czar() {
 		return unless self.elems > 1;
-		
+
 		my $orig-idx = $czar-idx;
 		repeat until $czar-idx == $orig-idx || self[$czar-idx].active {
 			$czar-idx = ($czar-idx + 1) % self;
 		}
 	}
-	
+
 	method at_key (Cool:D $key) {
 		self.first: *.name eq $key;
 	}
@@ -94,9 +94,9 @@ class PlayerStore is Array does Associative {
 	}
 }
 
-our enum Steps <Deal Submit Reveal Choose EndTurn>;
+our enum Step <Deal Submit Reveal Choose EndTurn>;
 our enum Control <Pause Continue>;
-our %stepnames = Steps.enums.invert;
+our %stepnames = Step.enums.invert;
 
 class IRC::CAHGame {
 	has $.conn    = !!!;
@@ -122,18 +122,18 @@ class IRC::CAHGame {
 	has $.black-deck = Deck.new(cardfile => 'bcards.txt');
 	has $.players = PlayerStore.new;
 
-	has $.current-step;
+	has Step $.current-step;
 	has $.black-card;
 	has $.round = 1;
 
 	has &.cleanup = ->{};
 
 	sub increment-step($step) {
-		Steps::{%stepnames{ ($step + 1) % %stepnames }};
+		Step::{%stepnames{ ($step + 1) % %stepnames }};
 	}
 
 	method next-step($step?) {
-		$!current-step = 
+		$!current-step =
 			$step // $!current-step && increment-step($!current-step) // Deal;
 
 		while $.step($!current-step) == Continue {
@@ -159,10 +159,10 @@ class IRC::CAHGame {
 			return;
 		}
 		$.players.push( Player.new(name => $name) );
-		
+
 		if !defined $.current-step {
 			$.say("$name is in!");
-			
+
 			if $.players == 4 {
 				$.say(
 					'We have 4 players now. ' ~
@@ -190,9 +190,10 @@ class IRC::CAHGame {
 			$.say("His final score was: \x[02]$player.score()");
 			my $king-is-dead = $player === $.players.czar;
 			$.white-deck.put-back($player.hand);
-			
+
 			if $.players < 4 {
 				$.say("Not enough players to keep this game alive. Bye.");
+				$.current-step = Nil;
 				return &.cleanup();
 			}
 			if $king-is-dead {
@@ -210,7 +211,7 @@ class IRC::CAHGame {
 
 	method kick-player($name, $victim-name) {
 		my ($player, $victim) = $.players{$name}, $.players{$victim-name};
-		return unless $player && $victim; 
+		return unless $player && $victim;
 		return if $player.vote === $victim;
 		$player.vote = $victim;
 
@@ -230,13 +231,13 @@ class IRC::CAHGame {
 			$.whisper-to($who, "Um.. You aren't the czar..");
 			return;
 		}
-		
+
 		my $winner = @.submitters[$choice-1];
 		if !$winner {
 			$.say("What? You can't pick that.");
 			return;
 		}
-		
+
 		$winner.score += 1;
 
 		$.say(
@@ -279,7 +280,7 @@ class IRC::CAHGame {
 				$.whisper-to($player, "You can't play a card you don't have.");
 				return;
 			}
-			
+
 			$player.submit-cards(@cards);
 			$.whisper-to($player, "Card(s) submitted! Thank you citizen.");
 
@@ -294,12 +295,12 @@ class IRC::CAHGame {
 	}
 
 	method !build-scores($player?) {
-		my $fmt = do if $player {{ 
-			my $u = $player === * ?? "\x1f" !! ""; 
-			"$u{.name} => {.score}$u"; 
+		my $fmt = do if $player {{
+			my $u = $player === * ?? "\x1f" !! "";
+			"$u{.name} => {.score}$u";
 		}}
-		else {{ 
-			"{.name} => {.score}" 
+		else {{
+			"{.name} => {.score}"
 		}}
 
 		"Current scores: " ~ $.players.sort(-*.score).map($fmt).join(', ');
@@ -321,11 +322,11 @@ class IRC::CAHGame {
 		}
 		$.players.rotate-czar();
 		$!black-card = $.black-deck.deal[0];
-		
+
 		$.show-score() if $.round %% 5;
-		
+
 		$.say(
-			"\x[02]Round $.round()\x[02]. " ~ 
+			"\x[02]Round $.round()\x[02]. " ~
 			"And our card czar for this turn is.. &bullshitify-name($.players.czar.name)"
 		);
 		$.act(
@@ -343,20 +344,20 @@ class IRC::CAHGame {
 	multi method step(Submit) {
 		$.say(
 			"Time to pick your best {
-				$.black-card.blanks() > 1 ?? 
-					"$.black-card.blanks() cards!" !! 
+				$.black-card.blanks() > 1 ??
+					"$.black-card.blanks() cards!" !!
 					"response!"
 			}"
 		);
 
 		Pause;
 	}
-	
+
 	has @.submitters;
 	multi method step(Reveal) {
 		my $czar = $.players.czar;
 		@.submitters = $.players.grep({ $_.active && $_ !=== $czar }).pick(*);
-	
+
 		$.say("The round is over!");
 		$.say("Let's all gather around and harshly judge each other's submissions now:");
 		for @.submitters.kv -> $num, $player {
@@ -384,7 +385,7 @@ class IRC::CAHGame {
 }
 
 my $prefixes = <
-	Mr Ms Mrs Miss 
+	Mr Ms Mrs Miss
 	Master Mistress
 	Monsignor
 	Doctor
@@ -392,7 +393,7 @@ my $prefixes = <
 	Professor
 	Honorable
 	Coach
-	Reverand 
+	Reverand
 	Father
 	Brother
 	Sister
@@ -422,7 +423,7 @@ my $suffixes = lines q:to"END";
 	the man made entirely of rice pudding
 	a fan of dubs, not subs. wtf?
 	a fan of subs, not dubs. wtf?
-	mai kawaii waifu ^_^ 
+	mai kawaii waifu ^_^
 	.. no that's really his name hahaa I know right?
 	with a powerful two-hander
 	who is currently sporting a raging semi
@@ -455,8 +456,8 @@ my $suffixes = lines q:to"END";
 	who only recently learned how to read
 	the giant, omniscient spider
 	meowth, thats right
-	who once touched a real girl :o 
-	who wasnt invited to play, but that didnt stop him >:[ 
+	who once touched a real girl :o
+	who wasnt invited to play, but that didnt stop him >:[
 	survivor of 4 suicide attempts so far
 	the magical fagromancer
 	who was supposed to be at the yaoi anime convention like an hour ago
@@ -470,17 +471,12 @@ sub bullshitify-name (Str $name) {
 }
 
 
-# sub MAIN() {
-# 	my $bot = IRC::CAHGame.new(conn => class {method sendln($t) {say $t} }, channel => 'Term');
+sub MAIN() {
+	my $bot = IRC::CAHGame.new(conn => class {method sendln($t) {say $t} }, channel => 'Term');
 
-# 	$bot.add-player('Ponbus');
-# 	$bot.add-player('Timbiki');
-# 	$bot.add-player('Shaggy');
-# 	$bot.add-player('Scooby');
-# 	$bot.add-player('Batman');
+	$bot.add-player('Ponbus');
+	$bot.add-player('Timbiki');
+	$bot.add-player('Shaggy');
 
-# 	$bot.retire-player('Ponbus');
-# 	$bot.add-player('Ponbus');
-
-# 	$bot.start;
-# }
+	$bot.start;
+}

@@ -11,12 +11,12 @@ use SixGame;
 
 class CAHBot does Net::IRC::CommandHandler {
 	has IRC::CAHGame $game;
-	
+
 	method game($ev, $match) is cmd(Long) {
 		return if defined $game;
 		$game .= new(
-			channel => lc(~$ev.where), 
-			conn => $ev.conn,
+			channel => lc(~$ev.where),
+			conn    => $ev.conn,
 			cleanup => sub { $game = Nil }
 		);
 
@@ -104,13 +104,29 @@ class CAHBot does Net::IRC::CommandHandler {
 		return unless defined $game;
 		$game.retire-player(lc(~$ev.who));
 	}
+
+	method spamshit($ev, $match) is cmd(Long) {
+		return unless defined $game;
+
+		with $game.players.grep(*.active) -> $active-players {
+			$ev.msg: "The current players are: " ~ $active-players>>.name.join(', ');
+		}
+		with $game.players.grep(! *.active) -> $inactive-players {
+			say $inactive-players.perl;
+			$ev.msg: "The queued players are: " ~ $inactive-players>>.name.join(', ');
+		}
+
+		with $game.current-step -> $step {
+			$ev.msg: "The current step is: " ~ $step;
+		}
+	}
 }
 
 
 Net::IRC::Bot.new(
 	nick     => 'Cahbot',
 	server   => 'irc.7chan.org',
-	channels => <#7chan>,
+	channels => <#/b/anned>,
 	debug    => 1,
 
 	modules  => (
