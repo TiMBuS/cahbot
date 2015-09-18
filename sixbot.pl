@@ -42,7 +42,7 @@ class CAHBot does Net::IRC::CommandHandler {
 	method play($ev, $match) is cmd {
 		return unless defined $game;
 
-		my @cards = $match.comb(/ \d+ /).uniq;
+		my @cards = $match.comb(/ \d+ /).unique;
 		return unless @cards;
 
 		$game.submit-cards(lc(~$ev.who), @cards);
@@ -72,18 +72,18 @@ class CAHBot does Net::IRC::CommandHandler {
 
 	method help($ev, $match) is cmd(Long) {
 		$ev.msg(
-			"Commands: !game to start a game, !join to get in, "~
-			"!hand to see your hand, !play <num> to play a card, "~
-			"!choose <num> to pick a winner (as czar), "~
-			"!score to see your score, !kick to kick a player, "~
-			"!quit to leave",
+			'Commands: !game to start a game, !join to get in, '~
+			'!hand to see your hand, !play <num> to play a card, '~
+			'!choose <num> to pick a winner (as czar), '~
+			'!score to see your score, !kick to kick a player, '~
+			'!quit to leave',
 			$ev.who
 		);
 	}
 
-	# method forcedeal($ev, $match) is cmd(Long) {
-	# 	$game.next-step;
-	# }
+	method forcenext($ev, $match) is cmd(Long) {
+		$game.next-step;
+	}
 
 	multi method nickchange($ev) {
 		return unless defined $game;
@@ -108,15 +108,14 @@ class CAHBot does Net::IRC::CommandHandler {
 	method spamshit($ev, $match) is cmd(Long) {
 		return unless defined $game;
 
-		with $game.players.grep(*.active) -> $active-players {
-			$ev.msg: "The current players are: " ~ $active-players>>.name.join(', ');
+		with $game.players.grep(*.active) -> @active-players {
+			$ev.msg: "The current players are: " ~ @active-players>>.name.join(', ');
 		}
-		with $game.players.grep(! *.active) -> $inactive-players {
-			say $inactive-players.perl;
-			$ev.msg: "The queued players are: " ~ $inactive-players>>.name.join(', ');
+		with $game.players.grep(! *.active) -> @inactive-players {
+			$ev.msg: "The queued players are: " ~ @inactive-players>>.name.join(', ');
 		}
 
-		with $game.current-step -> $step {
+		if $game.current-step -> $step {
 			$ev.msg: "The current step is: " ~ $step;
 		}
 	}
@@ -126,7 +125,7 @@ class CAHBot does Net::IRC::CommandHandler {
 Net::IRC::Bot.new(
 	nick     => 'Cahbot',
 	server   => 'irc.7chan.org',
-	channels => <#/b/anned>,
+	channels => <#linux>,
 	debug    => 1,
 
 	modules  => (

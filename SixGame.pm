@@ -59,39 +59,39 @@ class Player {
 
 	method clear-submission() {
 		@.hand .= grep(none @.submission);
-		@.submission = Nil;
+		@.submission = ();
 	}
 }
 
-class PlayerStore is Array does Associative {
-	has $czar-idx;
-	method reset-czar {$czar-idx = 0}
+class PlayerStore is Array {
+	has $czar-index;
+	method reset-czar {$czar-index = 0}
 	method new {my $o = callsame; $o.reset-czar; $o}
 
 	method czar {
-		self[$czar-idx];
+		self[$czar-index];
 	}
 
 	method rotate-czar() {
 		return unless self.elems > 1;
 
-		my $orig-idx = $czar-idx;
-		repeat until $czar-idx == $orig-idx || self[$czar-idx].active {
-			$czar-idx = ($czar-idx + 1) % self;
+		my $orig-idx = $czar-index;
+		repeat until $czar-index == $orig-idx || self[$czar-index].active {
+			$czar-index = ($czar-index + 1) % self;
 		}
 	}
 
-	method at_key (Cool:D $key) {
-		self.first: *.name eq $key;
+	method get(Str $player-name) {
+		self.first(*.name eq $player-name);
 	}
 
-	method delete_key (Cool:D $key) {
-		my $i = self.first-index(*.name eq $key);
-		if defined $i {
-			self.splice($i, 1);
-			$.rotate-czar if $czar-idx == $i;
+	method delete(Str $player-name) {
+		with self.first-index(*.name eq $player-name) -> $index {
+			self.splice($index, 1);
+			$.rotate-czar if $czar-index == $index;
 		}
 	}
+
 }
 
 our enum Step <Deal Submit Reveal Choose EndTurn>;
@@ -148,13 +148,13 @@ class IRC::CAHGame {
 
 	method start() {
 		if (!defined($.current-step)) && $.players >= 4 {
-			$.players.reset-czar;
-			$.next-step;
+			$.players.reset-czar();
+			$.next-step();
 		}
 	}
 
 	method add-player(Str $name) {
-		if $.players{$name} {
+		if $.players.get($name) {
 			$.whisper-to($name, "You're already in, dumbass.");
 			return;
 		}
@@ -176,15 +176,15 @@ class IRC::CAHGame {
 	}
 
 	method rename-player(Str $old, Str $new) {
-		if $.players{$old} -> $player {
+		if $.players.get($old) -> $player {
 			$player.name = $new;
 		}
 	}
 
 	method retire-player(Str $name) {
-		if $.players{$name} -> $player {
+		if $.players.get($name) -> $player {
 			$.say("$name is out!");
-			$.players{$name}:delete;
+			$.players.delete($name);
 			return unless $player.active;
 
 			$.say("His final score was: \x[02]$player.score()");
@@ -193,24 +193,22 @@ class IRC::CAHGame {
 
 			if $.players < 4 {
 				$.say("Not enough players to keep this game alive. Bye.");
-				$.current-step = Nil;
+				$!current-step = Nil;
 				return &.cleanup();
 			}
 			if $king-is-dead {
 				$.say("Oh no, the czar left. Let's start over..");
-				for $.players.list { .submission = Nil };
+				for $.players.list { .submission = () };
 				return $.next-step(EndTurn);
 			}
 			if $.current-step == Submit {
-				if self!check-submitted {
-					$.next-step;
-				}
+				$.next-step() unless self!awaiting-submissions;
 			}
 		}
 	}
 
 	method kick-player($name, $victim-name) {
-		my ($player, $victim) = $.players{$name}, $.players{$victim-name};
+		my ($player, $victim) = $.players.get($name), $.players.get($victim-name);
 		return unless $player && $victim;
 		return if $player.vote === $victim;
 		$player.vote = $victim;
@@ -227,7 +225,7 @@ class IRC::CAHGame {
 	method choose-winner(Str $who, Int $choice) {
 		return unless $.current-step == Choose;
 
-		if $.players{$who} !=== $.players.czar {
+		if $.players.get($who) !=== $.players.czar {
 			$.whisper-to($who, "Um.. You aren't the czar..");
 			return;
 		}
@@ -249,7 +247,7 @@ class IRC::CAHGame {
 	}
 
 	multi method show-hand(Str $who) {
-		if $.players{$who} -> $player {
+		if $.players.get($who) -> $player {
 			$.show-hand($player) if $player.active;
 		}
 	}
@@ -267,7 +265,7 @@ class IRC::CAHGame {
 	method submit-cards(Str $who, *@cards) {
 		return unless $.current-step == Submit;
 
-		if $.players{$who} -> $player {
+		if $.players.get($who) -> $player {
 			if $player === $.players.czar {
 				$.whisper-to($player, "You're the czar you idiot.");
 				return;
@@ -284,30 +282,31 @@ class IRC::CAHGame {
 			$player.submit-cards(@cards);
 			$.whisper-to($player, "Card(s) submitted! Thank you citizen.");
 
-			if self!check-submitted {
-				$.next-step;
-			}
+			$.next-step() unless self!awaiting-submissions;
 		}
 	}
-	method !check-submitted() {
-		#Only one player should he active and submissionless. The czar.
-		return $.players.grep({$_.active && $_.submission == 0}) == 1;
+	method !awaiting-submissions() {
+		# All active, non-czar players need to have a submission.
+		# Return true if any still haven't submitted cards.
+		my $czar = $.players.czar;
+		return ?( $.players.grep({$_ !=== $czar && .active && .submission == 0}) );
 	}
 
-	method !build-scores($player?) {
-		my $fmt = do if $player {{
-			my $u = $player === * ?? "\x1f" !! "";
-			"$u{.name} => {.score}$u";
-		}}
-		else {{
-			"{.name} => {.score}"
-		}}
+	method !build-scores(Player $requester?) {
+		my $formatter = sub ($player) {
+			if $requester && $requester === $player {
+				return "\x1f{$player.name} => {$player.score}\x1f";
+			}
+			else {
+				return "{$player.name} => {$player.score}";
+			}
+		};
 
-		"Current scores: " ~ $.players.sort(-*.score).map($fmt).join(', ');
+		return "Current scores: " ~ $.players.sort(-*.score).map($formatter).join(', ');
 	}
 
 	multi method show-score(Str $who){
-		if $.players{$who} -> $player {
+		if $.players.get($who) -> $player {
 			$.whisper-to($who, self!build-scores($player));
 		}
 	}
@@ -373,7 +372,7 @@ class IRC::CAHGame {
 	}
 
 	multi method step(EndTurn) {
-		@.submitters = Nil;
+		@.submitters = ();
 		for $.players.list -> $player {
 			$.white-deck.bury($player.submission);
 			$player.clear-submission();
@@ -384,7 +383,7 @@ class IRC::CAHGame {
 
 }
 
-my $prefixes = <
+my @prefixes = <
 	Mr Ms Mrs Miss
 	Master Mistress
 	Monsignor
@@ -409,7 +408,7 @@ my $prefixes = <
 	General
 >;
 
-my $suffixes = lines q:to"END";
+my @suffixes = lines q:to"END";
 	a 6 out of 10 at best
 	the worlds best hugger
 	owner of the softest buttocks
@@ -467,16 +466,35 @@ my $suffixes = lines q:to"END";
 	END
 
 sub bullshitify-name (Str $name) {
-	"$prefixes.roll() $name, $suffixes.roll()!";
+	"@prefixes.roll() $name, @suffixes.roll()!";
 }
 
 
 sub MAIN() {
 	my $bot = IRC::CAHGame.new(conn => class {method sendln($t) {say $t} }, channel => 'Term');
 
-	$bot.add-player('Ponbus');
-	$bot.add-player('Timbiki');
-	$bot.add-player('Shaggy');
+	my @players = <Ponbus Timbiki Shaggy Scooby>;
+
+	$bot.add-player($_) for @players;
 
 	$bot.start;
+
+	$bot.submit-cards($_, 1..$bot.black-card.blanks) for @players;
+
+	$bot.choose-winner($bot.players.czar.name, 1);
+
+	$bot.submit-cards($_, 1..$bot.black-card.blanks) for @players;
+
+	$bot.choose-winner($bot.players.czar.name, 1);
+
+	$bot.submit-cards($_, 1..$bot.black-card.blanks) for @players;
+
+	$bot.choose-winner($bot.players.czar.name, 1);
+
+	$bot.show-score('Timbiki');
+
+	$bot.submit-cards($_, 1..$bot.black-card.blanks) for @players[0,1];
+
+	$bot.retire-player(@players[3]);
+
 }
