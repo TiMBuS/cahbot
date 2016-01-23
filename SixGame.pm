@@ -26,7 +26,7 @@ class Deck {
 	}
 
 	method bury(*@cards) {
-		@graveyard.push: @cards;
+		@graveyard.append: @cards;
 	}
 
 	method put-back(*@cards) {
@@ -49,7 +49,7 @@ class Player {
 
 	method fill-hand($deck, $cap = 10) {
 		my $hand-size = @.hand.elems;
-		@.hand.push: $deck.deal( $cap - $hand-size )
+		@.hand.append: $deck.deal( $cap - $hand-size )
 			if $hand-size < $cap;
 	}
 
@@ -86,7 +86,7 @@ class PlayerStore is Array {
 	}
 
 	method delete(Str $player-name) {
-		with self.first-index(*.name eq $player-name) -> $index {
+		with self.first(*.name eq $player-name, :k) -> $index {
 			self.splice($index, 1);
 			$.rotate-czar if $czar-index == $index;
 		}
