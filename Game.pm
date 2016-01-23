@@ -9,7 +9,6 @@ class Deck {
 
     has cardfile => (is => 'ro',  isa => Str);
     has cards    => (is => 'ro',  isa => ArrayRef, builder => 1, lazy => 1);
-    
     has order    => (is => 'rwp', isa => ArrayRef, default => sub {[]} );
 
     method _build_cards() {
@@ -51,7 +50,7 @@ class Game {
     has playing     => (is => 'rwp', default => 1);
     has channel     => (is => 'rwp');
     has min_players => (is => 'ro', default => 4);
- 
+
     has black_deck  => (is => 'ro',  isa => 'Deck', builder => 1);
     has white_deck  => (is => 'ro',  isa => 'Deck', builder => 1);
 
@@ -80,9 +79,9 @@ class Game {
 
         $self->say("A game has begun!! We need at least ${\$self->min_players} people.");
         $self->say('Type !join to get in on the hot, sweaty action (no fat chicks).');
-        
+
         Coro::rouse_wait();
-        
+
         #It's game time.
         my $first_turn = 1;
         my $round_count = 0;
@@ -98,7 +97,7 @@ class Game {
 
             my $czar = $self->next_czar;
             $self->say(
-                "$turn And our card czar for this turn is.. " . 
+                "$turn And our card czar for this turn is.. " .
                 bullshitify_name($czar->name)
             );
             Coro::AnyEvent::sleep(2);
@@ -126,17 +125,17 @@ class Game {
                 $self->say('Time to pick your best response!');
             }
 
-            my $reminder = AE::timer 90, 40, sub { 
+            my $reminder = AE::timer 90, 40, sub {
                 my %slowasses;
                 @slowasses{(keys $self->player_hash)} = ();
                 delete @slowasses{(keys $submissions), lc $self->czar->name};
 
-                $self->say( 
-                    "Still waiting on answers from ". 
-                    join ', ', 
-                    map {$self->player_hash->{$_}->name} 
-                    keys %slowasses 
-                ); 
+                $self->say(
+                    "Still waiting on answers from ".
+                    join ', ',
+                    map {$self->player_hash->{$_}->name}
+                    keys %slowasses
+                );
             };
             Coro::rouse_wait($rouser);
             undef $reminder;
@@ -160,7 +159,7 @@ class Game {
             if (defined $self->czar && defined $self->player_hash->{lc $self->czar->name}) {
                 Coro::AnyEvent::sleep(1);
                 $self->say("Alright ${\$czar->name}, time to choose which one of these was the funniest.");
-                
+
                 $self->_set_step('choose');
                 $self->_set_step_rouse(Coro::rouse_cb);
 
@@ -186,9 +185,9 @@ class Game {
                 @{$player->hand}[@$idx] = @$new_cards;
 
                 my $i = 0;
-                my $pretty_cards = 
-                    join ', ', 
-                    map {$idx->[$i++] + 1 . ": [ $_ ]"} 
+                my $pretty_cards =
+                    join ', ',
+                    map {$idx->[$i++] + 1 . ": [ $_ ]"}
                     @$new_cards;
             }
 
@@ -256,7 +255,7 @@ class Game {
             $self->say_to($name, 'Too many cards! You need to submit '.$self->blank_count);
             return;
         }
-        
+
         my $player = $self->player_hash->{lc $name} //
             return $self->say_to($name, 'You aren\'t even playing! Wtf.');
 
@@ -299,19 +298,19 @@ class Game {
     multi method show_scores(Str $who) {
         my $player = $self->player_hash->{lc $who};
         if (defined $player){
-            $self->say_to($who, "Current scores: " . 
+            $self->say_to($who, "Current scores: " .
                 join ', ',
                 map {($player == $_ ? ''.$_->name.'' : $_->name) .' -> '. $_->score}
-                sort {$b->score <=> $a->score} 
+                sort {$b->score <=> $a->score}
                 @{$self->player_array}
             );
         }
     }
     multi method show_scores() {
-        $self->say("Current scores: " . 
+        $self->say("Current scores: " .
             join ', ',
             map { $_->name .' -> '. $_->score }
-            sort {$b->score <=> $a->score} 
+            sort {$b->score <=> $a->score}
             @{$self->player_array}
         );
     }
@@ -319,14 +318,14 @@ class Game {
     method unjoin(Str $who) {
         if (my $dead = $self->remove_player($who)) {
             $self->say(
-                "$who is out." . 
+                "$who is out." .
                 (($self->step ne 'lobby') ? " His final score was: ${\$dead->score}" : "")
             );
-            
-            $self->step_rouse->() 
+
+            $self->step_rouse->()
                 if $self->step eq 'submit' && keys $self->submissions >= $self->player_count-1;
 
-            $self->step_rouse->() 
+            $self->step_rouse->()
                 if $self->step eq 'choose' && $dead == $self->czar;
         }
 
@@ -345,7 +344,7 @@ class Game {
 
             my $tally = keys $self->kicktally->{$victim};
             my $needed = int ( $self->player_count / 2 );
-            
+
             if ($tally >= $needed) {
                 $self->unjoin($target_name);
             }
@@ -446,7 +445,7 @@ class Game {
 
     fun bullshitify_name (Str $name) {
         state $prefixes = [qw{
-            Mr Ms Mrs Miss 
+            Mr Ms Mrs Miss
             Master Mistress
             Monsignor
             Doctor
@@ -454,7 +453,7 @@ class Game {
             Professor
             Honorable
             Coach
-            Reverand 
+            Reverand
             Father
             Brother
             Sister
